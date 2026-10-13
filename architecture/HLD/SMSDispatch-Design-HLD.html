@@ -1,0 +1,650 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>SMS Dispatch HLD</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root {
+  --bg: #f0f2f6;
+  --surface: #ffffff;
+  --border: #d0d5e0;
+  --fg: #111318;
+  --fg2: #555e70;
+  --fg3: #9099ac;
+  --accent: #0055b3;
+  --accent-lt: #dceeff;
+  --accent-mid: #1a73e8;
+  --teal: #006b7a;
+  --teal-lt: #d9f3f7;
+  --teal-mid: #0099b0;
+  --green: #1a6e1a;
+  --green-lt: #d9f0d9;
+  --green-mid: #28a528;
+  --orange: #b54500;
+  --orange-lt: #fde8d8;
+  --orange-mid: #e05a00;
+  --purple: #5c3aa0;
+  --purple-lt: #ede5fc;
+  --purple-mid: #7c52d0;
+  --amber: #92400e;
+  --amber-lt: #fef3c7;
+  --amber-mid: #d97706;
+  --gray: #4a5368;
+  --gray-lt: #eaedf3;
+  --shadow: 0 2px 8px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.08);
+  --shadow-lg: 0 6px 24px rgba(0,0,0,.15), 0 2px 8px rgba(0,0,0,.10);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0f14; --surface: #171920; --border: #252a38; --fg: #e2e6f0;
+    --fg2: #8891a8; --fg3: #525c70;
+    --accent: #4a9ee8; --accent-lt: #071426; --accent-mid: #5baff5;
+    --teal: #25bcd4; --teal-lt: #051217; --teal-mid: #30d0ea;
+    --green: #3ab83a; --green-lt: #041204; --green-mid: #4ed44e;
+    --orange: #e07840; --orange-lt: #170900; --orange-mid: #f08040;
+    --purple: #9a72e0; --purple-lt: #0e0820; --purple-mid: #b090f0;
+    --amber: #fbbf24; --amber-lt: #1c1000; --amber-mid: #f59e0b;
+    --gray: #9099b0; --gray-lt: #1a1d26;
+    --shadow: 0 2px 8px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
+    --shadow-lg: 0 6px 24px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0f14; --surface: #171920; --border: #252a38; --fg: #e2e6f0;
+  --fg2: #8891a8; --fg3: #525c70;
+  --accent: #4a9ee8; --accent-lt: #071426; --accent-mid: #5baff5;
+  --teal: #25bcd4; --teal-lt: #051217; --teal-mid: #30d0ea;
+  --green: #3ab83a; --green-lt: #041204; --green-mid: #4ed44e;
+  --orange: #e07840; --orange-lt: #170900; --orange-mid: #f08040;
+  --purple: #9a72e0; --purple-lt: #0e0820; --purple-mid: #b090f0;
+  --amber: #fbbf24; --amber-lt: #1c1000; --amber-mid: #f59e0b;
+  --gray: #9099b0; --gray-lt: #1a1d26;
+  --shadow: 0 2px 8px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
+  --shadow-lg: 0 6px 24px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--fg); font-family: 'Inter', system-ui, sans-serif; font-size: 13px; line-height: 1.5; padding: 0; }
+
+/* ── Top toolbar ── */
+.toolbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 200;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  box-shadow: var(--shadow);
+}
+.toolbar-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  flex: 1;
+}
+.toolbar-title span { color: var(--fg2); font-weight: 400; margin-left: 8px; font-size: 12px; }
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+.badge-azure { background: var(--accent-lt); color: var(--accent); }
+.badge-live  { background: var(--green-lt);  color: var(--green);  }
+
+.btn-zoom {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--gray-lt); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 10px; cursor: pointer;
+  color: var(--fg2); font-size: 12px; font-weight: 500;
+}
+.btn-zoom:hover { background: var(--border); }
+#zoom-level { font-variant-numeric: tabular-nums; min-width: 3ch; text-align: center; }
+
+/* ── Canvas ── */
+.canvas-wrap {
+  overflow: auto;
+  height: calc(100dvh - 52px);
+  background: var(--bg);
+  background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.canvas {
+  padding: 48px 48px 80px;
+  transform-origin: top left;
+  min-width: 1300px;
+}
+
+/* ── Legend ── */
+.legend {
+  display: flex; gap: 20px; flex-wrap: wrap;
+  margin-bottom: 28px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.legend-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--fg2); font-weight: 500; }
+.legend-dot {
+  width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+}
+
+/* ── Swim lanes ── */
+.lanes-wrapper {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.lane {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.lane-header {
+  border-radius: 10px 10px 0 0;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  text-align: center;
+  position: sticky;
+  top: 0;
+}
+.lane-body {
+  border-radius: 0 0 10px 10px;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 520px;
+  border: 1px solid;
+  border-top: none;
+}
+
+/* Lane colour theming */
+.lane-ui    .lane-header { background: var(--purple-mid); color: #fff; }
+.lane-ui    .lane-body   { background: var(--purple-lt); border-color: var(--purple-mid); }
+.lane-api   .lane-header { background: var(--accent-mid); color: #fff; }
+.lane-api   .lane-body   { background: var(--accent-lt); border-color: var(--accent-mid); }
+.lane-bus   .lane-header { background: var(--teal-mid); color: #fff; }
+.lane-bus   .lane-body   { background: var(--teal-lt); border-color: var(--teal-mid); }
+.lane-fn    .lane-header { background: var(--orange-mid); color: #fff; }
+.lane-fn    .lane-body   { background: var(--orange-lt); border-color: var(--orange-mid); }
+.lane-db    .lane-header { background: var(--green-mid); color: #fff; }
+.lane-db    .lane-body   { background: var(--green-lt); border-color: var(--green-mid); }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  border: 1.5px solid transparent;
+  position: relative;
+}
+.card-icon { font-size: 22px; margin-bottom: 6px; display: block; }
+.card-title {
+  font-size: 13px; font-weight: 700; margin-bottom: 4px;
+  letter-spacing: -.2px;
+}
+.card-sub {
+  font-size: 11px; color: var(--fg2); line-height: 1.5;
+}
+.card-tag {
+  display: inline-block;
+  font-size: 10px; font-weight: 600; padding: 2px 7px;
+  border-radius: 4px; margin-top: 8px; text-transform: uppercase; letter-spacing: .4px;
+}
+
+/* Card accent borders */
+.card-purple { border-color: var(--purple-mid); }
+.card-blue   { border-color: var(--accent-mid); }
+.card-teal   { border-color: var(--teal-mid); }
+.card-orange { border-color: var(--orange-mid); }
+.card-green  { border-color: var(--green-mid); }
+.card-gray   { border-color: var(--gray); }
+.card-amber  { border-color: var(--amber-mid); }
+
+/* Tags */
+.tag-purple { background: var(--purple-lt); color: var(--purple); }
+.tag-blue   { background: var(--accent-lt); color: var(--accent); }
+.tag-teal   { background: var(--teal-lt);   color: var(--teal); }
+.tag-orange { background: var(--orange-lt); color: var(--orange); }
+.tag-green  { background: var(--green-lt);  color: var(--green); }
+.tag-gray   { background: var(--gray-lt);   color: var(--gray); }
+.tag-red    { background: #fde8e7; color: #c0180c; }
+.tag-amber  { background: var(--amber-lt);  color: var(--amber); }
+
+/* ── Free-tier note banner ── */
+.card-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: #fffbeb;
+  border: 1px dashed #d97706;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #78350f;
+}
+.card-note .note-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .card-note { background: #1c1000; border-color: #f59e0b; color: #fbbf24; }
+}
+:root[data-theme="dark"] .card-note { background: #1c1000; border-color: #f59e0b; color: #fbbf24; }
+
+/* Sub-group inside card */
+.sub-group {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.sub-row {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 500; color: var(--fg2);
+}
+.sub-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* DLQ stack visual */
+.dlq-stack {
+  position: relative;
+  margin-top: 12px;
+}
+.dlq-stack .card {
+  position: relative;
+  z-index: 2;
+}
+.dlq-stack::before {
+  content: '';
+  position: absolute;
+  top: 5px; left: 5px;
+  right: -5px; bottom: -5px;
+  background: var(--orange-lt);
+  border-radius: 10px;
+  border: 1.5px solid var(--orange-mid);
+  z-index: 1;
+}
+
+/* Flow section */
+.flow-section { margin-top: 28px; }
+.flow-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .7px; color: var(--fg3); margin-bottom: 14px;
+}
+.flow-steps { display: flex; flex-wrap: wrap; gap: 0; align-items: center; }
+.flow-step {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 11px; font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+.flow-arrow { font-size: 14px; color: var(--fg3); padding: 0 6px; flex-shrink: 0; }
+
+/* Status state machine */
+.state-row { display: flex; flex-wrap: wrap; gap: 0; align-items: center; margin-top: 18px; }
+.state-node {
+  padding: 7px 14px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; letter-spacing: .3px;
+}
+.state-arrow { font-size: 13px; padding: 0 6px; color: var(--fg3); }
+
+.divider { width: 100%; height: 1px; background: var(--border); margin: 24px 0; }
+
+/* External box */
+.ext-box {
+  background: var(--surface);
+  border: 2px dashed var(--gray);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+}
+.ext-box .card-title { color: var(--gray); }
+</style>
+
+<div class="toolbar">
+  <div class="toolbar-title">
+    SMS Dispatch System
+    <span>High-Level Design</span>
+  </div>
+  <span class="badge badge-azure">Azure</span>
+  <span class="badge badge-live">v1.2</span>
+  <button class="btn-zoom" onclick="zoom(-10)">−</button>
+  <span id="zoom-level">100%</span>
+  <button class="btn-zoom" onclick="zoom(+10)">+</button>
+  <button class="btn-zoom" onclick="resetZoom()">Reset</button>
+</div>
+
+<div class="canvas-wrap" id="canvasWrap">
+<div class="canvas" id="canvas">
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--purple-mid)"></div>UI / Triggers</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--amber-mid)"></div>Security &amp; Gateway</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-mid)"></div>Azure App Service (Web API)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--teal-mid)"></div>Azure Service Bus</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--orange-mid)"></div>Azure Functions</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green-mid)"></div>Azure SQL</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--gray); border-radius:50%"></div>External 3rd-party</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#6c3fc5; border-radius:50%"></div>App Insights (Telemetry)</div>
+    <div class="legend-item"><span style="font-size:10px;padding:2px 6px;background:#fde8d8;color:#b54500;border-radius:4px;font-weight:700">NOT IMPL</span> Planned / not implemented</div>
+  </div>
+
+  <!-- Swim lanes -->
+  <div class="lanes-wrapper">
+
+    <!-- Lane 1: Trigger / UI -->
+    <div class="lane lane-ui">
+      <div class="lane-header">① Trigger / UI</div>
+      <div class="lane-body">
+
+        <div class="card card-purple">
+          <span class="card-icon">🌐</span>
+          <div class="card-title">Angular SPA</div>
+          <div class="card-sub">Single-page app hosted on <strong>Azure App Service</strong>. Operator composes and submits SMS messages.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--purple-mid)"></span>POST /api/messages (send)</div>
+            <div class="sub-row"><span class="dot" style="background:var(--purple-mid)"></span>GET /api/messages (list / status)</div>
+            <div class="sub-row"><span class="dot" style="background:var(--orange-lt);border:1px solid var(--orange-mid)"></span><em style="color:var(--orange)">Retry DeadLettered — not in scope</em></div>
+          </div>
+          <span class="card-tag tag-purple">Azure App Service</span>
+        </div>
+
+        <!-- NEW: Azure WAF -->
+        <div class="card card-amber">
+          <span class="card-icon">🛡️</span>
+          <div class="card-title">Azure WAF</div>
+          <div class="card-sub">Web Application Firewall sits in front of all inbound traffic. Blocks malicious requests before they reach the API.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--amber-mid)"></span>OWASP rule sets (SQL injection, XSS, …)</div>
+            <div class="sub-row"><span class="dot" style="background:var(--amber-mid)"></span>DDoS protection</div>
+            <div class="sub-row"><span class="dot" style="background:var(--amber-mid)"></span>Geo-blocking &amp; IP allow-listing</div>
+          </div>
+          <div class="card-note">
+            <span class="note-icon">⚠️</span>
+            <span><strong>Best practice — skipped in Azure free tier.</strong> Azure WAF requires Azure Front Door (Standard/Premium) or Application Gateway (WAF v2 SKU), neither of which is available on the free tier. Configure this in production to protect against OWASP Top 10 threats.</span>
+          </div>
+          <span class="card-tag tag-amber">Azure Front Door / App Gateway</span>
+        </div>
+
+        <!-- NEW: Azure API Management -->
+        <div class="card card-amber">
+          <span class="card-icon">🔀</span>
+          <div class="card-title">Azure API Management</div>
+          <div class="card-sub">API Gateway layer between the WAF and the ASP.NET Core Web API. Centralises cross-cutting concerns.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--amber-mid)"></span>Rate limiting &amp; throttling per client</div>
+            <div class="sub-row"><span class="dot" style="background:var(--amber-mid)"></span>Auth — API Key / OAuth 2.0</div>
+            <div class="sub-row"><span class="dot" style="background:var(--amber-mid)"></span>Routes filtered traffic → Web API backend</div>
+            <div class="sub-row"><span class="dot" style="background:var(--amber-mid)"></span>Request/response transformation &amp; logging</div>
+          </div>
+          <div class="card-note">
+            <span class="note-icon">⚠️</span>
+            <span><strong>Best practice — not configured in Azure free tier.</strong> Azure API Management has no free tier (Consumption tier has minimal free calls; Developer/Standard tiers are paid). In this project the Web API is called directly. Enable APIM in production for centralised rate limiting, auth policies, and API versioning.</span>
+          </div>
+          <span class="card-tag tag-amber">Azure API Management</span>
+        </div>
+
+        <div class="card card-purple">
+          <span class="card-icon">⏱️</span>
+          <div class="card-title">Timer Trigger</div>
+          <div class="card-sub">Fires SmsPoller every 60 s via NCRONTAB schedule. No UI — automated Azure Functions internal trigger.</div>
+          <span class="card-tag tag-purple">Every 60 s</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Lane 2: Web API (combined) -->
+    <div class="lane lane-api">
+      <div class="lane-header">② Web API (App Service)</div>
+      <div class="lane-body">
+
+        <div class="card card-blue">
+          <span class="card-icon">⚙️</span>
+          <div class="combined-label" style="font-size:10px;color:var(--fg3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px;font-weight:600;">ASP.NET Core — Single Controller</div>
+          <div class="card-title">MessagesController</div>
+          <div class="card-sub">One controller handles all endpoints — message ingestion from SPA and status callbacks from Functions.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--accent-mid)"></span>POST /api/messages — create &amp; save Pending</div>
+            <div class="sub-row"><span class="dot" style="background:var(--accent-mid)"></span>GET /api/messages — list with status</div>
+            <div class="sub-row"><span class="dot" style="background:var(--accent-mid)"></span>PUT /api/messages/{id}/status — status callback</div>
+            <div class="sub-row"><span class="dot" style="background:var(--accent-mid)"></span>MediatR command/handler · JsonStringEnumConverter</div>
+            <div class="sub-row"><span class="dot" style="background:var(--accent-mid)"></span>CORS from AllowedOrigins app setting</div>
+          </div>
+          <span class="card-tag tag-blue">Azure App Service</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Lane 3: Service Bus -->
+    <div class="lane lane-bus">
+      <div class="lane-header">③ Azure Service Bus</div>
+      <div class="lane-body">
+
+        <div class="card card-teal">
+          <span class="card-icon">📡</span>
+          <div class="card-title">Topic: sms-dispatch</div>
+          <div class="card-sub">Pub/sub fan-out. SmsPoller publishes BusMessage JSON when message status becomes <strong>Queued</strong>. Topic-based design makes it easy to add consumers without changing producers.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--teal-mid)"></span><strong>send-processor</strong> → SmsSender ✅ implemented</div>
+            <div class="sub-row"><span class="dot" style="background:var(--orange-lt);border:1px solid var(--orange-mid)"></span><strong>audit-logger</strong> → SmsAuditLogger <span style="color:var(--orange);font-weight:700">[NOT IMPL]</span> — shows scalability</div>
+          </div>
+          <span class="card-tag tag-teal">Scalable pub/sub pattern</span>
+        </div>
+
+        <div class="dlq-stack">
+          <div class="card card-orange">
+            <span class="card-icon">☠️</span>
+            <div class="card-title">Dead-Letter Queue (DLQ)</div>
+            <div class="card-sub">Auto-moves messages after MaxDeliveryCount exceeded. One DLQ per subscription. DeadLetterHandler drains it and updates status → <strong>DeadLettered</strong>.</div>
+            <div class="sub-group">
+              <div class="sub-row"><span class="dot" style="background:var(--orange-mid)"></span>send-processor/$deadletterqueue</div>
+            </div>
+            <span class="card-tag tag-red">MaxDeliveryCount = 5 (configurable)</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Lane 4: Azure Functions -->
+    <div class="lane lane-fn">
+      <div class="lane-header">④ Azure Functions</div>
+      <div class="lane-body">
+
+        <div class="card card-orange">
+          <span class="card-icon">🔍</span>
+          <div class="card-title">SmsPoller</div>
+          <div class="card-sub">Timer-triggered. Queries SQL for <strong>Pending</strong> messages, marks them <strong>Queued</strong>, publishes BusMessage to Service Bus topic.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--orange-mid)"></span>Schedule: 0 */1 * * * *</div>
+            <div class="sub-row"><span class="dot" style="background:var(--orange-mid)"></span>Requires AzureWebJobsStorage</div>
+          </div>
+          <span class="card-tag tag-orange">Timer Trigger</span>
+        </div>
+
+        <div class="card card-orange">
+          <span class="card-icon">📤</span>
+          <div class="card-title">SmsSender</div>
+          <div class="card-sub">Triggered by <em>send-processor</em> subscription. Sets status → <strong>Sending</strong>, calls ISmsApiClient, updates to <strong>Sent</strong> or <strong>Failed</strong>.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--orange-mid)"></span>Polly retry + circuit breaker</div>
+            <div class="sub-row"><span class="dot" style="background:var(--orange-mid)"></span>PUT /api/messages/{id}/status</div>
+          </div>
+          <span class="card-tag tag-orange">Service Bus Trigger</span>
+        </div>
+
+        <div class="card" style="border:1.5px dashed var(--orange-mid);background:var(--surface);opacity:0.75;">
+          <span class="card-icon">📋</span>
+          <div class="card-title" style="color:var(--orange)">SmsAuditLogger <span style="font-size:10px;padding:2px 6px;background:var(--orange-lt);color:var(--orange);border-radius:4px;margin-left:4px;font-weight:700">NOT IMPL</span></div>
+          <div class="card-sub">Would trigger on <em>audit-logger</em> subscription. Included to demonstrate topic-based scalability — adding consumers without changing SmsPoller.</div>
+          <span class="card-tag tag-orange">Planned — Service Bus Trigger</span>
+        </div>
+
+        <div class="card card-orange">
+          <span class="card-icon">🚨</span>
+          <div class="card-title">DeadLetterHandler</div>
+          <div class="card-sub">Drains DLQ when MaxDeliveryCount (5) is exceeded. Updates message status → <strong>DeadLettered</strong> via PUT /api/messages/{id}/status.</div>
+          <span class="card-tag tag-orange">Service Bus DLQ Trigger</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Lane 5: Azure SQL + External + App Insights -->
+    <div class="lane lane-db">
+      <div class="lane-header">⑤ Data &amp; External</div>
+      <div class="lane-body">
+
+        <div class="card card-green">
+          <span class="card-icon">🗄️</span>
+          <div class="card-title">Azure SQL — Messages</div>
+          <div class="card-sub">Core table. Stores all SMS records with full status lifecycle, timestamps, TwilioSid, and error details.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--green-mid)"></span>Id (NUMERIC / decimal)</div>
+            <div class="sub-row"><span class="dot" style="background:var(--green-mid)"></span>Status, ToPhone, Body, FromPhone</div>
+            <div class="sub-row"><span class="dot" style="background:var(--green-mid)"></span>CreatedAt, SentAt, TwilioSid, ErrorMessage</div>
+          </div>
+          <span class="card-tag tag-green">EF Core — DbContext</span>
+        </div>
+
+        <div class="ext-box">
+          <span class="card-icon">📱</span>
+          <div class="card-title">3rd-Party SMS API</div>
+          <div class="card-sub">Twilio or compatible. Called by SmsSender via ISmsApiClient. Returns TwilioSid on success. MockSmsApiClient used in test environments.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:var(--gray)"></span>POST /send → returns SID</div>
+            <div class="sub-row"><span class="dot" style="background:var(--gray)"></span>Polly retry + circuit breaker</div>
+          </div>
+          <span class="card-tag tag-gray">External — Twilio / Mock</span>
+        </div>
+
+        <div class="card" style="border:1.5px solid #6c3fc5;background:var(--surface);">
+          <span class="card-icon">📊</span>
+          <div class="card-title" style="color:#6c3fc5">Azure Application Insights</div>
+          <div class="card-sub">Centralised telemetry &amp; logging across all components. Structured logs from Web API, SmsPoller, SmsSender, and DeadLetterHandler feed into a single workspace.</div>
+          <div class="sub-group">
+            <div class="sub-row"><span class="dot" style="background:#6c3fc5"></span>Request traces — Web API (App Service)</div>
+            <div class="sub-row"><span class="dot" style="background:#6c3fc5"></span>Function invocations &amp; durations</div>
+            <div class="sub-row"><span class="dot" style="background:#6c3fc5"></span>Exceptions, DLQ events, status failures</div>
+            <div class="sub-row"><span class="dot" style="background:#6c3fc5"></span>Custom metrics: msgs sent / failed / DLQ'd</div>
+          </div>
+          <span class="card-tag" style="background:#ede5fc;color:#6c3fc5">Azure Monitor · Log Analytics</span>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- end lanes-wrapper -->
+
+  <div class="divider"></div>
+
+  <!-- Message Status State Machine -->
+  <div class="flow-section">
+    <div class="flow-title">Message Status State Machine</div>
+    <div class="state-row">
+      <div class="state-node" style="background:var(--gray-lt);color:var(--gray)">⚫ Pending</div>
+      <span class="state-arrow">→</span>
+      <div class="state-node" style="background:var(--accent-lt);color:var(--accent)">🔵 Queued</div>
+      <span class="state-arrow">→</span>
+      <div class="state-node" style="background:var(--purple-lt);color:var(--purple)">🟣 Sending</div>
+      <span class="state-arrow">→</span>
+      <div class="state-node" style="background:var(--green-lt);color:var(--green)">🟢 Sent</div>
+    </div>
+    <div class="state-row" style="margin-top:10px">
+      <div style="width:140px"></div>
+      <span class="state-arrow" style="opacity:0">→</span>
+      <div style="width:80px"></div>
+      <span class="state-arrow">↘</span>
+      <div class="state-node" style="background:var(--orange-lt);color:var(--orange)">🟠 Failed</div>
+      <span class="state-arrow">→</span>
+      <div class="state-node" style="background:#fde8e7;color:#c0180c">☠️ DeadLettered</div>
+      <span style="font-size:10px;color:var(--fg3);margin-left:10px;font-style:italic">(Retry not in scope)</span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Data flow summary -->
+  <div class="flow-section">
+    <div class="flow-title">Happy-path data flow</div>
+    <div class="flow-steps">
+      <div class="flow-step" style="border-color:var(--purple-mid);color:var(--purple)">Angular POST /api/messages</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--amber-mid);color:var(--amber)">WAF (filters threats)</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--amber-mid);color:var(--amber)">API Gateway (rate limit / auth)</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--accent-mid);color:var(--accent)">Web API saves Pending to SQL</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--orange-mid);color:var(--orange)">SmsPoller picks Pending → Queued</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--teal-mid);color:var(--teal)">Published to sms-dispatch topic</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--orange-mid);color:var(--orange)">SmsSender → Sending → calls SMS API</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--green-mid);color:var(--green)">PUT /status → Sent + TwilioSid</div>
+    </div>
+  </div>
+
+</div><!-- canvas -->
+</div><!-- canvas-wrap -->
+
+<script>
+let scale = 1;
+const canvas = document.getElementById('canvas');
+
+function zoom(delta) {
+  scale = Math.min(2, Math.max(0.3, scale + delta / 100));
+  canvas.style.transform = `scale(${scale})`;
+  document.getElementById('zoom-level').textContent = Math.round(scale * 100) + '%';
+}
+function resetZoom() {
+  scale = 1;
+  canvas.style.transform = 'scale(1)';
+  document.getElementById('zoom-level').textContent = '100%';
+}
+
+let initDist = 0, initScale = 1;
+const wrap = document.getElementById('canvasWrap');
+wrap.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    initDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                          e.touches[0].clientY - e.touches[1].clientY);
+    initScale = scale;
+    e.preventDefault();
+  }
+}, { passive: false });
+wrap.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                             e.touches[0].clientY - e.touches[1].clientY);
+    scale = Math.min(2, Math.max(0.3, initScale * dist / initDist));
+    canvas.style.transform = `scale(${scale})`;
+    document.getElementById('zoom-level').textContent = Math.round(scale * 100) + '%';
+    e.preventDefault();
+  }
+}, { passive: false });
+</script>
+
+</body></html>

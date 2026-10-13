@@ -1,0 +1,1161 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>SMS Dispatch — Full Design</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* ── Design tokens ── */
+:root {
+  --bg:        #f5f6f8;
+  --surface:   #ffffff;
+  --surface2:  #f0f2f5;
+  --border:    #dde1e8;
+  --fg:        #111318;
+  --fg2:       #555e70;
+  --fg3:       #8891a4;
+  --accent:    #005fb8;
+  --accent-lt: #e6f0fb;
+  --accent-mid:#1a73e8;
+  --teal:      #006b7a;
+  --teal-lt:   #e3f3f6;
+  --teal-mid:  #0099b0;
+  --green:     #0d6e0d;
+  --green-lt:  #e6f4e6;
+  --green-mid: #28a528;
+  --orange:    #b54500;
+  --orange-lt: #fdf0e8;
+  --orange-mid:#e05a00;
+  --purple:    #5c3aa0;
+  --purple-lt: #f0eafc;
+  --purple-mid:#7c52d0;
+  --red:       #c0180c;
+  --red-lt:    #fde8e7;
+  --amber:     #92400e;
+  --amber-lt:  #fef3c7;
+  --amber-mid: #d97706;
+  --gray:      #4a5368;
+  --gray-lt:   #eaedf3;
+  --code-bg:   #f0f2f5;
+  --shadow:    0 2px 8px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.07);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0e13; --surface: #161820; --surface2: #1e2029;
+    --border: #282c38; --fg: #e4e7ef; --fg2: #8893a8; --fg3: #555f72;
+    --accent: #4a9ee8; --accent-lt: #050d1a; --accent-mid: #5baff5;
+    --teal: #2abcd4; --teal-lt: #030f12; --teal-mid: #30d0ea;
+    --green: #3eba3e; --green-lt: #030e03; --green-mid: #4ed44e;
+    --orange: #e87c44; --orange-lt: #160800; --orange-mid: #f08040;
+    --purple: #9a72e0; --purple-lt: #0c081a; --purple-mid: #b090f0;
+    --red: #f26056; --red-lt: #160403;
+    --amber: #fbbf24; --amber-lt: #1c1000; --amber-mid: #f59e0b;
+    --gray: #9099b0; --gray-lt: #1a1d26;
+    --code-bg: #1a1d26;
+    --shadow: 0 2px 8px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0e13; --surface: #161820; --surface2: #1e2029;
+  --border: #282c38; --fg: #e4e7ef; --fg2: #8893a8; --fg3: #555f72;
+  --accent: #4a9ee8; --accent-lt: #050d1a; --accent-mid: #5baff5;
+  --teal: #2abcd4; --teal-lt: #030f12; --teal-mid: #30d0ea;
+  --green: #3eba3e; --green-lt: #030e03; --green-mid: #4ed44e;
+  --orange: #e87c44; --orange-lt: #160800; --orange-mid: #f08040;
+  --purple: #9a72e0; --purple-lt: #0c081a; --purple-mid: #b090f0;
+  --red: #f26056; --red-lt: #160403;
+  --amber: #fbbf24; --amber-lt: #1c1000; --amber-mid: #f59e0b;
+  --gray: #9099b0; --gray-lt: #1a1d26;
+  --code-bg: #1a1d26;
+  --shadow: 0 2px 8px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ── Header / tabs ── */
+.doc-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 24px 0;
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+.doc-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.doc-meta  { font-size: 11px; color: var(--fg2); margin-top: 2px; }
+
+.tabs {
+  display: flex; gap: 0; margin-top: 14px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  padding: 8px 16px; font-size: 12px; font-weight: 500; cursor: pointer;
+  border: none; background: none; color: var(--fg2);
+  border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s;
+}
+.tab:hover { color: var(--fg); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+/* ── Content panels ── */
+.content { padding: 24px 16px 48px; max-width: 980px; margin: 0 auto; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+h2 { font-size: 14px; font-weight: 700; margin: 28px 0 12px; padding-bottom: 6px;
+     border-bottom: 1px solid var(--border); letter-spacing: -0.2px; }
+h2:first-child { margin-top: 0; }
+h3 { font-size: 12px; font-weight: 600; color: var(--fg2); text-transform: uppercase;
+     letter-spacing: .07em; margin: 20px 0 8px; }
+p  { font-size: 12px; color: var(--fg2); line-height: 1.7; margin-bottom: 10px; }
+
+/* ── Callout ── */
+.callout {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 14px; border-radius: 8px; margin-bottom: 14px;
+  font-size: 12px; line-height: 1.6;
+}
+.callout.info  { background: var(--accent-lt); border: 1px solid var(--accent); color: var(--accent); }
+.callout.warn  { background: var(--orange-lt); border: 1px solid var(--orange); color: var(--orange); }
+.callout.green { background: var(--green-lt);  border: 1px solid var(--green);  color: var(--green); }
+.callout-icon  { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.callout-body  { color: var(--fg); }
+.callout-body strong { color: inherit; }
+
+/* ── Tables ── */
+.tbl-wrap { overflow-x: auto; margin-bottom: 16px; }
+table { width: 100%; min-width: 380px; border-collapse: collapse; font-size: 11px; }
+th { text-align: left; padding: 8px 10px; background: var(--surface2); color: var(--fg2);
+     font-weight: 600; font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+     border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.5; }
+tr:last-child td { border-bottom: none; }
+.good { color: var(--green); font-weight: 600; }
+.bad  { color: var(--red);   font-weight: 600; }
+.warn-txt { color: var(--orange); font-weight: 600; }
+code { font-family: 'JetBrains Mono', monospace; font-size: 10px; background: var(--code-bg);
+       padding: 1px 5px; border-radius: 3px; }
+
+/* ── Code blocks ── */
+pre {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  line-height: 1.75; overflow-x: auto; color: var(--fg); margin-bottom: 14px; white-space: pre;
+}
+.kw { color: var(--accent); font-weight: 500; }
+.cm { color: var(--fg3); }
+.tp { color: var(--green); }
+.st { color: var(--orange); }
+.fn { color: var(--teal); }
+
+/* ── Spec grid (Capacity cards) ── */
+.spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.spec-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.spec-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--fg2); margin-bottom: 5px; }
+.spec-val  { font-size: 12px; font-weight: 600; }
+.spec-note { font-size: 11px; color: var(--fg2); margin-top: 3px; line-height: 1.5; }
+
+/* ── Throughput bar ── */
+.tp-bar { display: flex; gap: 0; height: 28px; border-radius: 6px; overflow: hidden; margin-bottom: 6px; }
+.tp-seg { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: white; }
+
+/* ── Class cards (LLD) ── */
+.class-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.class-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; }
+.class-hd { padding: 8px 12px; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+.class-hd.az  { background: var(--accent-lt); color: var(--accent); border-bottom: 1px solid var(--accent); }
+.class-hd.sb  { background: var(--teal-lt);   color: var(--teal);   border-bottom: 1px solid var(--teal); }
+.class-hd.db  { background: var(--green-lt);  color: var(--green);  border-bottom: 1px solid var(--green); }
+.class-hd.ext { background: var(--purple-lt); color: var(--purple); border-bottom: 1px solid var(--purple); }
+.class-hd.wa  { background: var(--orange-lt); color: var(--orange); border-bottom: 1px solid var(--orange); }
+.class-type { font-size: 9px; font-weight: 500; padding: 1px 5px; border-radius: 3px; background: var(--surface2); color: var(--fg2); font-family: 'JetBrains Mono', monospace; }
+.class-body { padding: 8px 12px; }
+.member { font-size: 10px; font-family: 'JetBrains Mono', monospace; padding: 2px 0; border-bottom: 1px solid var(--border); color: var(--fg); line-height: 1.4; }
+.member:last-child { border-bottom: none; }
+.member .ret { color: var(--accent); }
+.member .vis { color: var(--fg3); }
+.member .dep { color: var(--orange); font-size: 9px; }
+
+/* ── Endpoint cards (Web API) ── */
+.ep-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.ep { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.ep-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface2); }
+.method { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+.method.post { background: var(--green-lt);  color: var(--green); }
+.method.get  { background: var(--accent-lt); color: var(--accent); }
+.method.put  { background: var(--orange-lt); color: var(--orange); }
+.ep-path { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; }
+.ep-desc { font-size: 11px; color: var(--fg2); margin-left: auto; }
+.ep-body { padding: 10px 14px; }
+.ep-field { display: grid; grid-template-columns: 150px 80px 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+.ep-field:last-child { border-bottom: none; }
+.ep-field .fname { font-family: 'JetBrains Mono', monospace; }
+.ep-field .ftype { font-family: 'JetBrains Mono', monospace; color: var(--accent); }
+.ep-field .fnote { color: var(--fg2); font-size: 10px; }
+
+/* ── SPA feature list ── */
+.feature-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.feature-list li { font-size: 12px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: flex-start; gap: 8px; }
+.feature-list li::before { content: attr(data-icon); flex-shrink: 0; }
+.req-met { color: var(--green); }
+
+/* ── State badges ── */
+.states { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; }
+.state { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1.5px solid; }
+.state.pending  { border-color: var(--fg3);   background: var(--surface2); color: var(--fg2); }
+.state.queued   { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+.state.sending  { border-color: var(--teal);   background: var(--teal-lt);  color: var(--teal); }
+.state.sent     { border-color: var(--green);  background: var(--green-lt); color: var(--green); }
+.state.failed   { border-color: var(--red);    background: var(--red-lt);   color: var(--red); }
+.state.dlq-st   { border-color: var(--orange); background: var(--orange-lt);color: var(--orange); border-style: dashed; }
+.arrow { color: var(--fg3); font-size: 14px; }
+
+/* ── Legend ── */
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-top: 16px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fg2); }
+.ld { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════════
+   HLD TAB — swimlane styles
+   ═══════════════════════════════════════════════════════ */
+.hld-wrap {
+  overflow: auto;
+  background: var(--bg);
+}
+.hld-canvas {
+  padding: 16px 0 40px;
+  transform-origin: top left;
+  min-width: 1200px;
+}
+
+.hld-legend {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  padding: 12px 16px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow); margin-bottom: 24px;
+}
+.hld-legend-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--fg2); font-weight: 500; }
+.hld-ldot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+.hld-zoom { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.hld-zoom-btn {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; color: var(--fg2); font-size: 12px; font-weight: 500;
+  font-family: 'Inter', sans-serif;
+}
+.hld-zoom-btn:hover { background: var(--border); }
+#hld-zoom-val { font-variant-numeric: tabular-nums; min-width: 3ch; text-align: center; font-size: 12px; color: var(--fg2); }
+
+.lanes-wrapper {
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.lane { flex: 1; min-width: 200px; display: flex; flex-direction: column; }
+.lane-header {
+  border-radius: 10px 10px 0 0; padding: 10px 14px;
+  font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase;
+  text-align: center;
+}
+.lane-body {
+  border-radius: 0 0 10px 10px; padding: 16px 12px;
+  display: flex; flex-direction: column; gap: 12px; min-height: 500px;
+  border: 1px solid; border-top: none;
+}
+.lane-ui  .lane-header { background: var(--purple-mid); color: #fff; }
+.lane-ui  .lane-body   { background: var(--purple-lt);  border-color: var(--purple-mid); }
+.lane-api .lane-header { background: var(--accent-mid); color: #fff; }
+.lane-api .lane-body   { background: var(--accent-lt);  border-color: var(--accent-mid); }
+.lane-bus .lane-header { background: var(--teal-mid);   color: #fff; }
+.lane-bus .lane-body   { background: var(--teal-lt);    border-color: var(--teal-mid); }
+.lane-fn  .lane-header { background: var(--orange-mid); color: #fff; }
+.lane-fn  .lane-body   { background: var(--orange-lt);  border-color: var(--orange-mid); }
+.lane-db  .lane-header { background: var(--green-mid);  color: #fff; }
+.lane-db  .lane-body   { background: var(--green-lt);   border-color: var(--green-mid); }
+
+.hcard {
+  background: var(--surface); border-radius: 10px; padding: 12px 14px;
+  box-shadow: var(--shadow); border: 1.5px solid transparent; position: relative;
+}
+.hcard-icon  { font-size: 20px; margin-bottom: 5px; display: block; }
+.hcard-title { font-size: 12px; font-weight: 700; margin-bottom: 3px; letter-spacing: -.2px; }
+.hcard-sub   { font-size: 11px; color: var(--fg2); line-height: 1.5; }
+.hcard-tag   { display: inline-block; font-size: 9px; font-weight: 600; padding: 2px 6px;
+               border-radius: 4px; margin-top: 7px; text-transform: uppercase; letter-spacing: .4px; }
+
+.hcard-purple { border-color: var(--purple-mid); }
+.hcard-blue   { border-color: var(--accent-mid); }
+.hcard-teal   { border-color: var(--teal-mid); }
+.hcard-orange { border-color: var(--orange-mid); }
+.hcard-green  { border-color: var(--green-mid); }
+.hcard-gray   { border-color: var(--gray); }
+.hcard-amber  { border-color: var(--amber-mid); }
+.hcard-dashed { border-style: dashed; opacity: 0.75; }
+
+.htag-purple { background: var(--purple-lt); color: var(--purple); }
+.htag-blue   { background: var(--accent-lt); color: var(--accent); }
+.htag-teal   { background: var(--teal-lt);   color: var(--teal); }
+.htag-orange { background: var(--orange-lt); color: var(--orange); }
+.htag-green  { background: var(--green-lt);  color: var(--green); }
+.htag-gray   { background: var(--gray-lt);   color: var(--gray); }
+.htag-amber  { background: var(--amber-lt);  color: var(--amber); }
+.htag-red    { background: var(--red-lt);    color: var(--red); }
+
+.hsub-group {
+  margin-top: 9px; padding: 7px 9px; background: var(--bg);
+  border-radius: 6px; display: flex; flex-direction: column; gap: 4px;
+}
+.hsub-row { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--fg2); }
+.hsub-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* Free-tier note */
+.card-note {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin-top: 8px; padding: 6px 8px;
+  background: #fffbeb; border: 1px dashed #d97706;
+  border-radius: 6px; font-size: 11px; line-height: 1.4; color: #78350f;
+}
+.card-note .note-icon { flex-shrink: 0; font-size: 12px; margin-top: 1px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .card-note { background: #1c1000; border-color: #f59e0b; color: #fbbf24; }
+}
+:root[data-theme="dark"] .card-note { background: #1c1000; border-color: #f59e0b; color: #fbbf24; }
+
+/* DLQ stack */
+.dlq-stack { position: relative; margin-top: 4px; }
+.dlq-stack .hcard { position: relative; z-index: 2; }
+.dlq-stack::before {
+  content: ''; position: absolute; top: 5px; left: 5px; right: -5px; bottom: -5px;
+  background: var(--orange-lt); border-radius: 10px;
+  border: 1.5px solid var(--orange-mid); z-index: 1;
+}
+
+/* HLD flow + state machine */
+.hld-divider { width: 100%; height: 1px; background: var(--border); margin: 20px 0; }
+.flow-section { margin-top: 16px; }
+.flow-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--fg3); margin-bottom: 12px; }
+.flow-steps { display: flex; flex-wrap: wrap; gap: 0; align-items: center; }
+.flow-step {
+  background: var(--surface); border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 7px 12px; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow);
+}
+.flow-arrow { font-size: 13px; color: var(--fg3); padding: 0 5px; flex-shrink: 0; }
+.state-row { display: flex; flex-wrap: wrap; gap: 0; align-items: center; margin-top: 14px; }
+.state-node { padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+.state-arrow { font-size: 12px; padding: 0 5px; color: var(--fg3); }
+
+.ext-box {
+  background: var(--surface); border: 2px dashed var(--gray);
+  border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow);
+}
+</style>
+
+<!-- NAV -->
+<div class="doc-header">
+  <div class="doc-title">SMS Dispatch Platform — Full System Design</div>
+  <div class="doc-meta">HLD · Capacity · LLD / Classes · DB Schema · Web API · SPA Spec · Error Handling — Azure + .NET 8</div>
+  <div class="tabs">
+    <button class="tab active" onclick="show('hld',this)">HLD</button>
+    <button class="tab" onclick="show('capacity',this)">Capacity</button>
+    <button class="tab" onclick="show('lld',this)">LLD / Classes</button>
+    <button class="tab" onclick="show('schema',this)">DB Schema</button>
+    <button class="tab" onclick="show('api',this)">Web API</button>
+    <button class="tab" onclick="show('spa',this)">SPA Spec</button>
+    <button class="tab" onclick="show('errors',this)">Error Handling</button>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- ═══════════════════════════════ HLD ═══════════════════════════════ -->
+<div class="panel active" id="hld">
+
+  <div class="callout info">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body">
+      <strong>Source of truth:</strong> Azure SQL. The Web API writes every submitted message to SQL with <code>Status='Pending'</code>. SmsPoller (Timer trigger every 60 s) drives the full Pending → Queued → Sent/Failed state machine. Angular polls the Web API status endpoint, which reads from SQL.
+    </div>
+  </div>
+
+  <!-- Zoom controls -->
+  <div class="hld-zoom">
+    <button class="hld-zoom-btn" onclick="hldZoom(-10)">−</button>
+    <span id="hld-zoom-val">100%</span>
+    <button class="hld-zoom-btn" onclick="hldZoom(+10)">+</button>
+    <button class="hld-zoom-btn" onclick="hldReset()">Reset</button>
+  </div>
+
+  <!-- Legend -->
+  <div class="hld-legend">
+    <div class="hld-legend-item"><div class="hld-ldot" style="background:var(--purple-mid)"></div>UI / Triggers</div>
+    <div class="hld-legend-item"><div class="hld-ldot" style="background:var(--amber-mid)"></div>Security &amp; Gateway (best practice)</div>
+    <div class="hld-legend-item"><div class="hld-ldot" style="background:var(--accent-mid)"></div>Azure App Service (Web API)</div>
+    <div class="hld-legend-item"><div class="hld-ldot" style="background:var(--teal-mid)"></div>Azure Service Bus</div>
+    <div class="hld-legend-item"><div class="hld-ldot" style="background:var(--orange-mid)"></div>Azure Functions</div>
+    <div class="hld-legend-item"><div class="hld-ldot" style="background:var(--green-mid)"></div>Azure SQL</div>
+    <div class="hld-legend-item"><div class="hld-ldot" style="background:var(--gray); border-radius:50%"></div>External 3rd-party</div>
+    <div class="hld-legend-item"><span style="font-size:10px;padding:2px 6px;background:var(--orange-lt);color:var(--orange);border-radius:4px;font-weight:700">NOT IMPL</span> Planned, not implemented</div>
+    <div class="hld-legend-item"><span style="font-size:10px;padding:2px 6px;background:var(--amber-lt);color:var(--amber);border-radius:4px;font-weight:700">⚠ FREE TIER</span> Skipped — not available free</div>
+  </div>
+
+  <!-- Swim lanes -->
+  <div class="hld-wrap">
+  <div class="hld-canvas" id="hld-canvas">
+  <div class="lanes-wrapper">
+
+    <!-- Lane 1: Trigger / UI -->
+    <div class="lane lane-ui">
+      <div class="lane-header">① Trigger / UI</div>
+      <div class="lane-body">
+
+        <div class="hcard hcard-purple">
+          <span class="hcard-icon">🌐</span>
+          <div class="hcard-title">Angular SPA</div>
+          <div class="hcard-sub">Single-page app hosted on <strong>Azure App Service</strong>. Operators compose and submit SMS messages.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--purple-mid)"></span>POST /api/messages (send)</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--purple-mid)"></span>GET /api/messages (list / status)</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--orange-lt);border:1px solid var(--orange-mid)"></span><em style="color:var(--orange)">Retry DeadLettered — not in scope</em></div>
+          </div>
+          <span class="hcard-tag htag-purple">Azure App Service</span>
+        </div>
+
+        <!-- Azure WAF — best practice / not free tier -->
+        <div class="hcard hcard-amber">
+          <span class="hcard-icon">🛡️</span>
+          <div class="hcard-title">Azure WAF</div>
+          <div class="hcard-sub">Web Application Firewall in front of all inbound traffic. Blocks malicious requests before they reach the API.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--amber-mid)"></span>OWASP rule sets (SQL injection, XSS…)</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--amber-mid)"></span>DDoS protection</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--amber-mid)"></span>Geo-blocking &amp; IP allow-listing</div>
+          </div>
+          <div class="card-note">
+            <span class="note-icon">⚠️</span>
+            <span><strong>Best practice — skipped in Azure free tier.</strong> Requires Azure Front Door (Standard/Premium) or Application Gateway WAF v2 SKU, neither available on the free tier. Configure in production.</span>
+          </div>
+          <span class="hcard-tag htag-amber">Azure Front Door / App Gateway</span>
+        </div>
+
+        <!-- Azure API Management — best practice / not free tier -->
+        <div class="hcard hcard-amber">
+          <span class="hcard-icon">🔀</span>
+          <div class="hcard-title">Azure API Management</div>
+          <div class="hcard-sub">API Gateway between WAF and the ASP.NET Core Web API. Centralises cross-cutting concerns.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--amber-mid)"></span>Rate limiting &amp; throttling per client</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--amber-mid)"></span>Auth — API Key / OAuth 2.0</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--amber-mid)"></span>Routes filtered traffic → Web API backend</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--amber-mid)"></span>Request/response transformation &amp; logging</div>
+          </div>
+          <div class="card-note">
+            <span class="note-icon">⚠️</span>
+            <span><strong>Best practice — not configured in Azure free tier.</strong> No free tier (Consumption has minimal free calls; Developer/Standard are paid). Web API called directly in this project. Enable APIM in production.</span>
+          </div>
+          <span class="hcard-tag htag-amber">Azure API Management</span>
+        </div>
+
+        <div class="hcard hcard-purple">
+          <span class="hcard-icon">⏱️</span>
+          <div class="hcard-title">Timer Trigger</div>
+          <div class="hcard-sub">Fires SmsPoller every 60 s via NCRONTAB. Automated Azure Functions internal trigger — no UI.</div>
+          <span class="hcard-tag htag-purple">Every 60 s</span>
+        </div>
+
+      </div>
+    </div><!-- /lane-ui -->
+
+    <!-- Lane 2: Web API -->
+    <div class="lane lane-api">
+      <div class="lane-header">② Web API (App Service)</div>
+      <div class="lane-body">
+
+        <div class="hcard hcard-blue">
+          <span class="hcard-icon">⚙️</span>
+          <div style="font-size:10px;color:var(--fg3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px;font-weight:600;">ASP.NET Core — Single Controller</div>
+          <div class="hcard-title">MessagesController</div>
+          <div class="hcard-sub">One controller handles all endpoints — message ingestion from SPA and status callbacks from Functions.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--accent-mid)"></span>POST /api/messages — create &amp; save Pending</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--accent-mid)"></span>GET /api/messages — list with search / pagination</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--accent-mid)"></span>PUT /api/messages/{id}/status — Function callback</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--accent-mid)"></span>MediatR command/handler · JsonStringEnumConverter</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--accent-mid)"></span>CORS from AllowedOrigins app setting</div>
+          </div>
+          <span class="hcard-tag htag-blue">Azure App Service</span>
+        </div>
+
+      </div>
+    </div><!-- /lane-api -->
+
+    <!-- Lane 3: Service Bus -->
+    <div class="lane lane-bus">
+      <div class="lane-header">③ Azure Service Bus</div>
+      <div class="lane-body">
+
+        <div class="hcard hcard-teal">
+          <span class="hcard-icon">📡</span>
+          <div class="hcard-title">Topic: sms-dispatch</div>
+          <div class="hcard-sub">Pub/sub fan-out. SmsPoller publishes BusMessage JSON when status becomes <strong>Queued</strong>. Topic-based design lets new consumers be added without changing producers.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--teal-mid)"></span><strong>send-processor</strong> → SmsSender ✅ implemented</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--orange-lt);border:1px solid var(--orange-mid)"></span><strong>audit-logger</strong> → SmsAuditLogger <span style="color:var(--orange);font-weight:700">[NOT IMPL]</span></div>
+          </div>
+          <span class="hcard-tag htag-teal">Scalable pub/sub</span>
+        </div>
+
+        <div class="dlq-stack">
+          <div class="hcard hcard-orange">
+            <span class="hcard-icon">☠️</span>
+            <div class="hcard-title">Dead-Letter Queue (DLQ)</div>
+            <div class="hcard-sub">Auto-moves messages after MaxDeliveryCount exceeded. One DLQ per subscription. DeadLetterHandler marks row <strong>DeadLettered</strong>.</div>
+            <div class="hsub-group">
+              <div class="hsub-row"><span class="hsub-dot" style="background:var(--orange-mid)"></span>send-processor/$deadletterqueue</div>
+            </div>
+            <span class="hcard-tag htag-red">MaxDeliveryCount = 5 (configurable)</span>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /lane-bus -->
+
+    <!-- Lane 4: Azure Functions -->
+    <div class="lane lane-fn">
+      <div class="lane-header">④ Azure Functions</div>
+      <div class="lane-body">
+
+        <div class="hcard hcard-orange">
+          <span class="hcard-icon">🔍</span>
+          <div class="hcard-title">SmsPoller</div>
+          <div class="hcard-sub">Timer-triggered. Queries SQL for <strong>Pending</strong> messages, marks them <strong>Queued</strong>, publishes BusMessage to Service Bus topic.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--orange-mid)"></span>Schedule: 0 */1 * * * * (60 s)</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--orange-mid)"></span>Requires AzureWebJobsStorage</div>
+          </div>
+          <span class="hcard-tag htag-orange">Timer Trigger</span>
+        </div>
+
+        <div class="hcard hcard-orange">
+          <span class="hcard-icon">📤</span>
+          <div class="hcard-title">SmsSender</div>
+          <div class="hcard-sub">Triggered by <em>send-processor</em> subscription. Sets status → <strong>Sending</strong>, calls ISmsApiClient, updates to <strong>Sent</strong> or <strong>Failed</strong>.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--orange-mid)"></span>Polly retry + circuit breaker</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--orange-mid)"></span>PUT /api/messages/{id}/status callback</div>
+          </div>
+          <span class="hcard-tag htag-orange">Service Bus Trigger</span>
+        </div>
+
+        <div class="hcard hcard-orange hcard-dashed">
+          <span class="hcard-icon">📋</span>
+          <div class="hcard-title" style="color:var(--orange)">SmsAuditLogger <span style="font-size:9px;padding:2px 5px;background:var(--orange-lt);color:var(--orange);border-radius:3px;margin-left:4px;font-weight:700">NOT IMPL</span></div>
+          <div class="hcard-sub">Would trigger on <em>audit-logger</em> subscription. Demonstrates topic-based scalability — adding consumers without changing SmsPoller.</div>
+          <span class="hcard-tag htag-orange">Planned — Service Bus Trigger</span>
+        </div>
+
+        <div class="hcard hcard-orange">
+          <span class="hcard-icon">🚨</span>
+          <div class="hcard-title">DeadLetterHandler</div>
+          <div class="hcard-sub">Drains DLQ when MaxDeliveryCount (5) is exceeded. Updates message status → <strong>DeadLettered</strong> via PUT /api/messages/{id}/status.</div>
+          <span class="hcard-tag htag-orange">Service Bus DLQ Trigger</span>
+        </div>
+
+      </div>
+    </div><!-- /lane-fn -->
+
+    <!-- Lane 5: Data & External -->
+    <div class="lane lane-db">
+      <div class="lane-header">⑤ Data &amp; External</div>
+      <div class="lane-body">
+
+        <div class="hcard hcard-green">
+          <span class="hcard-icon">🗄️</span>
+          <div class="hcard-title">Azure SQL — Messages</div>
+          <div class="hcard-sub">Core table. Stores all SMS records with full status lifecycle, timestamps, ProviderSid, and error details.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--green-mid)"></span>Id (NUMERIC IDENTITY)</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--green-mid)"></span>Status, ToPhone, FromPhone, MessageBody</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--green-mid)"></span>CreatedDateTime, ModifiedDatetime</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--green-mid)"></span>CorrelationId, ProviderStatus, ProviderMessageId</div>
+          </div>
+          <span class="hcard-tag htag-green">EF Core · DbContext</span>
+        </div>
+
+        <div class="ext-box">
+          <span class="hcard-icon">📱</span>
+          <div class="hcard-title" style="color:var(--gray)">3rd-Party SMS API</div>
+          <div class="hcard-sub">Called by SmsSender via ISmsApiClient. Returns ProviderMessageId on success. MockSmsApiClient used in test environments.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--gray)"></span>POST /send → returns SID</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:var(--gray)"></span>Polly retry + circuit breaker</div>
+          </div>
+          <span class="hcard-tag htag-gray">External — Twilio / Mock</span>
+        </div>
+
+        <div class="hcard" style="border:1.5px solid #6c3fc5;">
+          <span class="hcard-icon">📊</span>
+          <div class="hcard-title" style="color:#6c3fc5">Azure Application Insights</div>
+          <div class="hcard-sub">Centralised telemetry across all components. Structured logs from Web API, SmsPoller, SmsSender, and DeadLetterHandler.</div>
+          <div class="hsub-group">
+            <div class="hsub-row"><span class="hsub-dot" style="background:#6c3fc5"></span>Request traces — Web API (App Service)</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:#6c3fc5"></span>Function invocations &amp; durations</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:#6c3fc5"></span>Exceptions, DLQ events, status failures</div>
+            <div class="hsub-row"><span class="hsub-dot" style="background:#6c3fc5"></span>Custom metrics: msgs sent / failed / DLQ'd</div>
+          </div>
+          <span class="hcard-tag" style="background:#ede5fc;color:#6c3fc5">Azure Monitor · Log Analytics</span>
+        </div>
+
+      </div>
+    </div><!-- /lane-db -->
+
+  </div><!-- /lanes-wrapper -->
+
+  <!-- State machine -->
+  <div class="hld-divider"></div>
+  <div class="flow-section">
+    <div class="flow-title">Message Status State Machine</div>
+    <div class="state-row">
+      <div class="state-node" style="background:var(--gray-lt);color:var(--gray)">⚫ Pending</div>
+      <span class="state-arrow">→</span>
+      <div class="state-node" style="background:var(--accent-lt);color:var(--accent)">🔵 Queued</div>
+      <span class="state-arrow">→</span>
+      <div class="state-node" style="background:var(--purple-lt);color:var(--purple)">🟣 Sending</div>
+      <span class="state-arrow">→</span>
+      <div class="state-node" style="background:var(--green-lt);color:var(--green)">🟢 Sent</div>
+    </div>
+    <div class="state-row" style="margin-top:10px">
+      <div style="width:126px"></div>
+      <span class="state-arrow" style="opacity:0">→</span>
+      <div style="width:78px"></div>
+      <span class="state-arrow">↘</span>
+      <div class="state-node" style="background:var(--orange-lt);color:var(--orange)">🟠 Failed</div>
+      <span class="state-arrow">→ retry ×5 →</span>
+      <div class="state-node" style="background:var(--red-lt);color:var(--red)">☠️ DeadLettered</div>
+    </div>
+  </div>
+
+  <!-- Happy-path flow -->
+  <div class="hld-divider"></div>
+  <div class="flow-section">
+    <div class="flow-title">Happy-path data flow</div>
+    <div class="flow-steps">
+      <div class="flow-step" style="border-color:var(--purple-mid);color:var(--purple)">Angular POST /api/messages</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--amber-mid);color:var(--amber)">WAF (filters threats)</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--amber-mid);color:var(--amber)">API Gateway (rate limit / auth)</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--accent-mid);color:var(--accent)">Web API saves Pending to SQL</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--orange-mid);color:var(--orange)">SmsPoller: Pending → Queued</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--teal-mid);color:var(--teal)">Published to sms-dispatch topic</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--orange-mid);color:var(--orange)">SmsSender → Sending → SMS API</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-step" style="border-color:var(--green-mid);color:var(--green)">PUT /status → Sent + ProviderSid</div>
+    </div>
+  </div>
+
+  </div><!-- /hld-canvas -->
+  </div><!-- /hld-wrap -->
+</div><!-- /panel hld -->
+
+<!-- ═══════════════════════════════ CAPACITY ═══════════════════════════════ -->
+<div class="panel" id="capacity">
+  <h2>Throughput Requirements</h2>
+  <div class="spec-grid">
+    <div class="spec-card"><div class="spec-label">Daily volume</div><div class="spec-val">10,000 records/day</div><div class="spec-note">≈ 6.9 msg/min average</div></div>
+    <div class="spec-card"><div class="spec-label">Peak (noon)</div><div class="spec-val">3,000 records/hour</div><div class="spec-note">50 msg/min · 0.83 msg/s</div></div>
+    <div class="spec-card"><div class="spec-label">Target SLA</div><div class="spec-val">&lt; 10 min from create</div><div class="spec-note">Poll cycle 60 s + up to ~3 s API call</div></div>
+    <div class="spec-card"><div class="spec-label">SMS API round-trip</div><div class="spec-val">~3 seconds</div><div class="spec-note">95% uptime (438 h downtime/yr)</div></div>
+    <div class="spec-card"><div class="spec-label">Poll batch size</div><div class="spec-val">500 rows / tick</div><div class="spec-note">Handles 500/60s ≈ 8.3 msg/s — 10× peak</div></div>
+    <div class="spec-card"><div class="spec-label">Max concurrency</div><div class="spec-val">16 parallel sends</div><div class="spec-note">Azure Functions default; tunable via host.json</div></div>
+  </div>
+
+  <h2>Throughput Math</h2>
+  <p>Peak = 3,000 msg/hr = 50 msg/min. Each send takes ~3 s. With <strong>16 concurrent Function instances</strong>, throughput = 16 ÷ 3 × 60 = <strong>320 msg/min</strong> — 6.4× peak capacity. Even at 4 concurrent: 80 msg/min = 1.6× peak. The poll batch of 500 rows per 60-second tick clears a full peak-hour backlog in one cycle.</p>
+
+  <h3>Peak Hour Timeline (3,000 messages)</h3>
+  <div class="tp-bar">
+    <div class="tp-seg" style="flex:1; background:var(--accent)">Poller ~3s</div>
+    <div class="tp-seg" style="flex:12; background:var(--teal)">Bus fan-out &lt;1s</div>
+    <div class="tp-seg" style="flex:60; background:var(--green)">Concurrent sends ≈ 56s (16 workers × 3s × 188 batches)</div>
+    <div class="tp-seg" style="flex:20; background:var(--surface2); color:var(--fg2)">All done &lt; 5 min</div>
+  </div>
+  <p style="font-size:11px;color:var(--fg3)">3,000 msgs ÷ 16 workers × 3 s/msg ≈ 562 s ≈ 9.4 min worst case (serial); concurrent execution brings this well under the 10-min SLA.</p>
+
+  <h2>Scaling Levers</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Lever</th><th>Where</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>maxConcurrentCalls</code></td><td>host.json · ServiceBus extension</td><td>Parallel Function executions per subscription</td></tr>
+        <tr><td>Batch size (SELECT TOP N)</td><td>SmsPoller config</td><td>Messages processed per 60-second poll</td></tr>
+        <tr><td>Poll interval</td><td>Timer CRON expression</td><td>Reduce to 30 s to halve first-seen latency</td></tr>
+        <tr><td>Function app scale-out</td><td>Azure Portal / Consumption plan</td><td>Auto scales to match Service Bus queue depth</td></tr>
+        <tr><td><code>MaxDeliveryCount</code></td><td>Service Bus subscription</td><td>Retry attempts before DLQ (default 5)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Third-Party API Downtime (95% uptime)</h2>
+  <p>At 95% uptime, the API is unavailable ~438 hours/year. Messages submitted during downtime stay <code>Queued</code> in the Service Bus subscription. SmsSender will retry up to <code>MaxDeliveryCount=5</code> with exponential back-off before DLQing. A <em>stale-Queued cleanup job</em> (hourly timer) resets rows stuck in Queued &gt;10 min back to Pending so they re-enter the pipeline on the next poll.</p>
+</div>
+
+<!-- ═══════════════════════════════ LLD ═══════════════════════════════ -->
+<div class="panel" id="lld">
+  <h2>Class &amp; Interface Design</h2>
+
+  <h3>Web API project — SmsDispatch.Api</h3>
+  <div class="class-grid">
+    <div class="class-card">
+      <div class="class-hd az"><span>MessagesController</span><span class="class-type">Controller</span></div>
+      <div class="class-body">
+        <div class="member"><span class="vis">-</span> _db: <span class="ret">SmsDbContext</span></div>
+        <div class="member"><span class="vis">+</span> Create([FromBody/Form/Query] req): <span class="ret">Task&lt;IActionResult&gt;</span></div>
+        <div class="member"><span class="vis">+</span> Search(q, page, pageSize, sortBy): <span class="ret">Task&lt;PagedResult&gt;</span></div>
+      </div>
+    </div>
+    <div class="class-card">
+      <div class="class-hd az"><span>StatusController</span><span class="class-type">Controller</span></div>
+      <div class="class-body">
+        <div class="member"><span class="vis">-</span> _db: <span class="ret">SmsDbContext</span></div>
+        <div class="member"><span class="vis">+</span> Get(id): <span class="ret">Task&lt;SmsStatusDto&gt;</span></div>
+        <div class="member"><span class="vis">+</span> Update(id, update): <span class="ret">Task&lt;IActionResult&gt;</span> <span class="dep">← Function callback</span></div>
+      </div>
+    </div>
+    <div class="class-card">
+      <div class="class-hd db"><span>SmsDbContext</span><span class="class-type">EF Core</span></div>
+      <div class="class-body">
+        <div class="member">Messages: <span class="ret">DbSet&lt;Message&gt;</span></div>
+        <div class="member">AuditLogs: <span class="ret">DbSet&lt;AuditLog&gt;</span></div>
+        <div class="member">OnModelCreating: <span class="ret">void</span> <span class="dep">indexes + constraints</span></div>
+      </div>
+    </div>
+    <div class="class-card">
+      <div class="class-hd db"><span>Message</span><span class="class-type">Entity</span></div>
+      <div class="class-body">
+        <div class="member">Id: <span class="ret">long</span> <span class="dep">PK IDENTITY</span></div>
+        <div class="member">ToNumber: <span class="ret">string</span></div>
+        <div class="member">FromNumber: <span class="ret">string</span></div>
+        <div class="member">MessageBody: <span class="ret">string</span></div>
+        <div class="member">Status: <span class="ret">string</span> <span class="dep">Pending|Queued|Sending|Sent|Failed|DeadLettered</span></div>
+        <div class="member">CorrelationId: <span class="ret">string?</span></div>
+        <div class="member">CreatedDateTime: <span class="ret">DateTime</span></div>
+        <div class="member">ModifiedDateTime: <span class="ret">DateTime?</span></div>
+        <div class="member">ProviderStatus: <span class="ret">string?</span> <span class="dep">raw 3rd-party response</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Azure Functions project — SmsDispatch.Functions</h3>
+  <div class="class-grid">
+    <div class="class-card">
+      <div class="class-hd az"><span>SmsPoller</span><span class="class-type">Timer Function</span></div>
+      <div class="class-body">
+        <div class="member"><span class="vis">-</span> _db: <span class="ret">SmsDbContext</span></div>
+        <div class="member"><span class="vis">-</span> _sender: <span class="ret">ServiceBusSender</span></div>
+        <div class="member"><span class="vis">+</span> Run(TimerInfo): <span class="ret">Task</span></div>
+        <div class="member"><span class="vis">-</span> FetchPending(batchSize): <span class="ret">Task&lt;List&lt;Message&gt;&gt;</span></div>
+        <div class="member"><span class="vis">-</span> MarkQueued(ids, tx): <span class="ret">Task</span></div>
+        <div class="member"><span class="vis">-</span> PublishBatch(messages): <span class="ret">Task</span></div>
+      </div>
+    </div>
+    <div class="class-card">
+      <div class="class-hd az"><span>SmsSender</span><span class="class-type">ServiceBus Function</span></div>
+      <div class="class-body">
+        <div class="member"><span class="vis">-</span> _smsClient: <span class="ret">ISmsApiClient</span></div>
+        <div class="member"><span class="vis">-</span> _http: <span class="ret">IHttpClientFactory</span></div>
+        <div class="member"><span class="vis">+</span> Run(ServiceBusReceivedMessage): <span class="ret">Task</span></div>
+        <div class="member"><span class="vis">-</span> CallSmsApi(payload): <span class="ret">Task&lt;SmsApiResponse&gt;</span></div>
+        <div class="member"><span class="vis">-</span> ReportStatus(id, status): <span class="ret">Task</span> <span class="dep">PUT /api/status</span></div>
+      </div>
+    </div>
+    <div class="class-card">
+      <div class="class-hd az"><span>SmsAuditLogger</span><span class="class-type">ServiceBus Function</span></div>
+      <div class="class-body">
+        <div class="member"><span class="vis">-</span> _db: <span class="ret">SmsDbContext</span></div>
+        <div class="member"><span class="vis">+</span> Run(ServiceBusReceivedMessage): <span class="ret">Task</span></div>
+        <div class="member"><span class="vis">-</span> WriteAuditRecord(payload): <span class="ret">Task</span></div>
+      </div>
+    </div>
+    <div class="class-card">
+      <div class="class-hd wa"><span>ISmsApiClient</span><span class="class-type">Interface</span></div>
+      <div class="class-body">
+        <div class="member"><span class="vis">+</span> SendAsync(from, to, body): <span class="ret">Task&lt;SmsApiResponse&gt;</span></div>
+      </div>
+    </div>
+    <div class="class-card">
+      <div class="class-hd ext"><span>SmsApiClient</span><span class="class-type">HttpClient impl</span></div>
+      <div class="class-body">
+        <div class="member"><span class="vis">-</span> _http: <span class="ret">HttpClient</span></div>
+        <div class="member"><span class="vis">+</span> SendAsync(from, to, body): <span class="ret">Task&lt;SmsApiResponse&gt;</span></div>
+        <div class="member"><span class="vis">-</span> MapStatus(raw): <span class="ret">MessageStatus</span></div>
+      </div>
+    </div>
+    <div class="class-card">
+      <div class="class-hd az"><span>DeadLetterHandler</span><span class="class-type">DLQ Function</span></div>
+      <div class="class-body">
+        <div class="member"><span class="vis">+</span> Run(ServiceBusReceivedMessage): <span class="ret">Task</span></div>
+        <div class="member"><span class="vis">-</span> MarkDeadLettered(correlationId): <span class="ret">Task</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Message contract — Service Bus payload</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td><code>Id</code></td><td><code>long</code></td><td>SQL primary key — idempotency anchor</td></tr>
+        <tr><td><code>ToNumber</code></td><td><code>string</code></td><td>E.164 format e.g. +14155552671</td></tr>
+        <tr><td><code>FromNumber</code></td><td><code>string</code></td><td>Sender number</td></tr>
+        <tr><td><code>MessageBody</code></td><td><code>string</code></td><td>Max 1000 chars (schema constraint)</td></tr>
+        <tr><td><code>EnqueuedAt</code></td><td><code>DateTime UTC</code></td><td>When SmsPoller published</td></tr>
+        <tr><td><code>CorrelationId</code></td><td><code>string (GUID)</code></td><td>Set as ServiceBusMessage.MessageId for dedup</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ SCHEMA ═══════════════════════════════ -->
+<div class="panel" id="schema">
+  <h2>Azure SQL Schema</h2>
+
+  <div class="callout green">
+    <span class="callout-icon">✓</span>
+    <div class="callout-body">
+      <strong>Matches the given schema exactly</strong> — ID, To, From, Message, Status, CreatedDateTime, ModifiedDateTime. Extended with CorrelationId, ProviderStatus, and ProviderMessageId for traceability.
+    </div>
+  </div>
+
+  <pre><span class="cm">-- Messages: source of truth for all outbound SMS</span>
+<span class="kw">CREATE TABLE</span> dbo.Messages (
+    Id                  <span class="tp">NUMERIC</span>(18, 0)    <span class="kw">IDENTITY</span>(1,1)  <span class="kw">NOT NULL</span>,
+    [To]                <span class="tp">NUMERIC</span>(18, 0)   <span class="kw">NOT NULL</span>,          <span class="cm">-- matches given schema</span>
+    [From]              <span class="tp">NUMERIC</span>(18, 0)   <span class="kw">NOT NULL</span>,
+    Message             <span class="tp">NVARCHAR</span>(1000)   <span class="kw">NOT NULL</span>,
+    Status              <span class="tp">NVARCHAR</span>(100)    <span class="kw">NOT NULL</span>  <span class="kw">DEFAULT</span> <span class="st">'Pending'</span>,
+    <span class="cm">-- Pending → Queued (poller) → Sending → Sent | Failed | DeadLettered</span>
+    CreatedDateTime     <span class="tp">DATETIME</span>         <span class="kw">NOT NULL</span>  <span class="kw">DEFAULT</span> GETUTCDATE(),
+    ModifiedDatetime    <span class="tp">DATETIME</span>         <span class="kw">NULL</span>,
+    CorrelationId       <span class="tp">NVARCHAR</span>(50)     <span class="kw">NULL</span>,      <span class="cm">-- GUID set when Queued</span>
+    ProviderStatus      <span class="tp">NVARCHAR</span>(100)    <span class="kw">NULL</span>,      <span class="cm">-- raw API response status string</span>
+    ProviderMessageId   <span class="tp">NVARCHAR</span>(100)    <span class="kw">NULL</span>,      <span class="cm">-- provider-assigned SID</span>
+    <span class="kw">CONSTRAINT</span> PK_Messages <span class="kw">PRIMARY KEY</span> (Id)
+);
+
+<span class="cm">-- Filtered index: SmsPoller query is Status IN ('Pending') — scans index only</span>
+<span class="kw">CREATE INDEX</span> IX_Messages_Status_Created
+    <span class="kw">ON</span> dbo.Messages (Status, CreatedDateTime)
+    <span class="kw">INCLUDE</span> (Id, [To], [From], Message, CorrelationId)
+    <span class="kw">WHERE</span> Status <span class="kw">IN</span> (<span class="st">'Pending'</span>, <span class="st">'Queued'</span>);
+
+<span class="cm">-- Search index: SPA "contains/equals" search on Message column</span>
+<span class="kw">CREATE INDEX</span> IX_Messages_Search
+    <span class="kw">ON</span> dbo.Messages (CreatedDateTime <span class="kw">DESC</span>)
+    <span class="kw">INCLUDE</span> (Id, [To], [From], Message, Status, ModifiedDatetime);
+
+<span class="cm">-- AuditLogs: immutable append-only audit trail</span>
+<span class="kw">CREATE TABLE</span> dbo.AuditLogs (
+    Id              <span class="tp">BIGINT</span>           <span class="kw">IDENTITY</span>(1,1) <span class="kw">NOT NULL</span>,
+    MessageId       <span class="tp">NUMERIC</span>(18, 0)   <span class="kw">NOT NULL</span>,
+    EventType       <span class="tp">NVARCHAR</span>(50)     <span class="kw">NOT NULL</span>,  <span class="cm">-- 'Queued'|'Sending'|'Sent'|'Failed'|'DLQ'</span>
+    Payload         <span class="tp">NVARCHAR</span>(MAX)    <span class="kw">NULL</span>,      <span class="cm">-- JSON snapshot of SmsEventPayload</span>
+    RecordedAt      <span class="tp">DATETIME</span>         <span class="kw">NOT NULL</span>  <span class="kw">DEFAULT</span> GETUTCDATE(),
+    CorrelationId   <span class="tp">NVARCHAR</span>(50)     <span class="kw">NULL</span>,
+    <span class="kw">CONSTRAINT</span> PK_AuditLogs <span class="kw">PRIMARY KEY</span> (Id),
+    <span class="kw">CONSTRAINT</span> FK_AuditLogs_Messages
+        <span class="kw">FOREIGN KEY</span> (MessageId) <span class="kw">REFERENCES</span> dbo.Messages(Id)
+);
+<span class="kw">CREATE INDEX</span> IX_AuditLogs_MessageId <span class="kw">ON</span> dbo.AuditLogs (MessageId);
+
+<span class="cm">-- Sample seed data (demo)</span>
+<span class="kw">INSERT INTO</span> dbo.Messages ([To], [From], Message, Status, CreatedDateTime) <span class="kw">VALUES</span>
+    (12125551234, 18005550001, <span class="st">'Your appointment is confirmed for Monday at 9am.'</span>, <span class="st">'Sent'</span>, GETUTCDATE()),
+    (13105559876, 18005550001, <span class="st">'Hi! Your order #4821 has shipped.'</span>, <span class="st">'Pending'</span>, GETUTCDATE()),
+    (14155552000, 18005550001, <span class="st">'Reminder: payment due tomorrow.'</span>, <span class="st">'Failed'</span>, GETUTCDATE()),
+    (19175554321, 18005550001, <span class="st">'Your verification code is 847261.'</span>, <span class="st">'Sent'</span>, GETUTCDATE()),
+    (12015558888, 18005550001, <span class="st">'Welcome! Reply STOP to unsubscribe.'</span>, <span class="st">'Queued'</span>, GETUTCDATE());</pre>
+
+  <h2>Status State Machine</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>From</th><th>To</th><th>Who sets</th><th>Condition</th></tr></thead>
+      <tbody>
+        <tr><td><code>Pending</code></td><td><code>Queued</code></td><td>SmsPoller</td><td>Row picked in batch; UPDATE before publish</td></tr>
+        <tr><td><code>Queued</code></td><td><code>Sending</code></td><td>SmsSender</td><td>Function begins send; idempotency check first</td></tr>
+        <tr><td><code>Sending</code></td><td><code>Sent</code></td><td>SmsSender → PUT /status</td><td>Provider returns "Successfully Sent"</td></tr>
+        <tr><td><code>Sending</code></td><td><code>Failed</code></td><td>SmsSender → PUT /status</td><td>"Not Sent" response — permanent failure</td></tr>
+        <tr><td><code>any</code></td><td><code>DeadLettered</code></td><td>DeadLetterHandler</td><td>DLQ triggered after MaxDeliveryCount=5</td></tr>
+        <tr><td><code>Failed/DLQ</code></td><td><code>Pending</code></td><td>Admin endpoint</td><td>Manual operator reset for retry</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ API ═══════════════════════════════ -->
+<div class="panel" id="api">
+  <h2>Web API — Endpoints</h2>
+
+  <div class="callout info">
+    <span class="callout-icon">📌</span>
+    <div class="callout-body">
+      <strong>Requirement:</strong> Accept data in multiple formats — Query String, form-data, and JSON. At least one string field. MessagesController handles all three via model binding.
+    </div>
+  </div>
+
+  <div class="ep-list">
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method post">POST</span>
+        <span class="ep-path">/api/messages</span>
+        <span class="ep-desc">Create SMS record — accepts JSON, form-data, or query string</span>
+      </div>
+      <div class="ep-body">
+        <div class="ep-field"><span class="fname">to</span><span class="ftype">numeric</span><span class="fnote">Recipient phone (18,0)</span></div>
+        <div class="ep-field"><span class="fname">from</span><span class="ftype">numeric</span><span class="fnote">Sender phone (18,0)</span></div>
+        <div class="ep-field"><span class="fname">message</span><span class="ftype">string</span><span class="fnote">SMS body — max 1000 chars <strong class="req-met">★ required string field</strong></span></div>
+        <div style="padding:8px 0;font-size:11px;color:var(--fg2)">Returns: <code>201 Created</code> with <code>{"id":123,"status":"Pending","createdDateTime":"..."}</code></div>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method get">GET</span>
+        <span class="ep-path">/api/messages</span>
+        <span class="ep-desc">Search with pagination and sort — powers the SPA grid</span>
+      </div>
+      <div class="ep-body">
+        <div class="ep-field"><span class="fname">q</span><span class="ftype">string?</span><span class="fnote">Search term — applied as CONTAINS or EQUALS on Message, To, From</span></div>
+        <div class="ep-field"><span class="fname">matchType</span><span class="ftype">string?</span><span class="fnote"><code>contains</code> (default) or <code>equals</code></span></div>
+        <div class="ep-field"><span class="fname">sortBy</span><span class="ftype">string?</span><span class="fnote"><code>createdDateTime</code> | <code>status</code> | <code>to</code> | <code>message</code></span></div>
+        <div class="ep-field"><span class="fname">sortDir</span><span class="ftype">string?</span><span class="fnote"><code>desc</code> (default) or <code>asc</code></span></div>
+        <div class="ep-field"><span class="fname">page</span><span class="ftype">int?</span><span class="fnote">1-based (default 1)</span></div>
+        <div class="ep-field"><span class="fname">pageSize</span><span class="ftype">int?</span><span class="fnote">10–100, default 25</span></div>
+        <div style="padding:8px 0;font-size:11px;color:var(--fg2)">Returns: <code>{"items":[...],"total":412,"page":1,"pageSize":25,"totalPages":17}</code></div>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method get">GET</span>
+        <span class="ep-path">/api/messages/{id}/status</span>
+        <span class="ep-desc">Single message status — Angular polls this every 3 s</span>
+      </div>
+      <div class="ep-body">
+        <div style="font-size:11px;color:var(--fg2)">Returns: <code>{"id":123,"status":"Sent","providerStatus":"Successfully Sent","modifiedDateTime":"..."}</code></div>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method put">PUT</span>
+        <span class="ep-path">/api/messages/{id}/status</span>
+        <span class="ep-desc">Function callback — updates SQL after SMS API response</span>
+      </div>
+      <div class="ep-body">
+        <div class="ep-field"><span class="fname">status</span><span class="ftype">string</span><span class="fnote"><code>Sending</code> | <code>Sent</code> | <code>Failed</code> | <code>DeadLettered</code></span></div>
+        <div class="ep-field"><span class="fname">providerStatus</span><span class="ftype">string?</span><span class="fnote">Raw string from 3rd-party: "Successfully Sent", "Not Sent – Not a valid phone", etc.</span></div>
+        <div class="ep-field"><span class="fname">providerMessageId</span><span class="ftype">string?</span><span class="fnote">Provider-assigned ID for tracing</span></div>
+        <div style="padding:8px 0;font-size:11px;color:var(--fg2)">Returns: <code>204 No Content</code></div>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="method put">PUT</span>
+        <span class="ep-path">/api/messages/{id}/reset</span>
+        <span class="ep-desc">Admin — reset Failed/DeadLettered back to Pending for reprocessing</span>
+      </div>
+      <div class="ep-body">
+        <div style="font-size:11px;color:var(--fg2)">Sets Status=Pending, clears CorrelationId. Returns <code>204 No Content</code>.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <h2>Model Binding Strategy</h2>
+  <p>The POST endpoint uses a custom model binder that reads the same fields from all three sources with a single DTO. The controller method signature is decorated with a combined attribute so all three content types work without three separate endpoints.</p>
+  <pre><span class="cm">// Single action — three input formats</span>
+[<span class="fn">HttpPost</span>]
+[<span class="fn">Consumes</span>(<span class="st">"application/json"</span>, <span class="st">"application/x-www-form-urlencoded"</span>, <span class="st">"multipart/form-data"</span>)]
+<span class="kw">public async</span> Task&lt;IActionResult&gt; <span class="fn">Create</span>([<span class="fn">FromBody</span>][<span class="fn">FromForm</span>] CreateMessageRequest req)
+
+<span class="cm">// Query-string fallback: GET /api/messages?to=...&amp;from=...&amp;message=...</span>
+<span class="cm">// Handled via separate GET /api/messages/send or form POST above</span></pre>
+</div>
+
+<!-- ═══════════════════════════════ SPA ═══════════════════════════════ -->
+<div class="panel" id="spa">
+  <h2>Single Page Application — Spec</h2>
+
+  <div class="callout info">
+    <span class="callout-icon">📋</span>
+    <div class="callout-body">
+      All required front-end features from the problem statement are listed below with how each is implemented.
+    </div>
+  </div>
+
+  <ul class="feature-list">
+    <li data-icon="🔍"><strong>Search / filter string input</strong> — Text input above the grid. Bound to reactive form. Query triggered only after ≥3 characters (debounced 300 ms). Matches on Message (contains/equals), To number, From number.</li>
+    <li data-icon="3️⃣"><strong>Min 3 characters before search</strong> — <code>valueChanges.pipe(filter(v =&gt; v.length &gt;= 3 || v.length === 0), debounceTime(300))</code> — empty input shows all records.</li>
+    <li data-icon="⚡"><strong>Contains / Equals toggle</strong> — Radio buttons or a dropdown above the grid pass <code>matchType=contains|equals</code> to the API.</li>
+    <li data-icon="⬆"><strong>Grid reorderable by column</strong> — Clickable column headers for: Message, To, From, Status, Submitted On (CreatedDateTime), Modified On (ModifiedDatetime). Arrow icons indicate sort direction. Sends <code>sortBy</code> + <code>sortDir</code> to API.</li>
+    <li data-icon="📄"><strong>Pagination</strong> — Page size selector (10/25/50/100). Prev / Next / numbered page links. Shows "Showing 26–50 of 412 results".</li>
+    <li data-icon="✨"><strong>Clean, easy to understand</strong> — Grid view with status badges (colour-coded), phone number formatting, message preview truncated to 80 chars with full-text tooltip. Status polling for the most recently submitted record.</li>
+    <li data-icon="📱"><strong>Responsive</strong> — Mobile: stacked cards instead of table. Tablet/Desktop: full table with sticky column headers.</li>
+  </ul>
+
+  <h2>Component Tree</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Component</th><th>Responsibility</th><th>Key inputs/outputs</th></tr></thead>
+      <tbody>
+        <tr><td><code>AppComponent</code></td><td>Root shell, nav header, router outlet</td><td>—</td></tr>
+        <tr><td><code>SendSmsComponent</code></td><td>Form for POST /api/messages; status polling after submit</td><td>Emits <code>messageSent</code></td></tr>
+        <tr><td><code>MessageGridComponent</code></td><td>Search input, match-type toggle, sortable table, pagination</td><td><code>@Input() refresh: Signal&lt;number&gt;</code></td></tr>
+        <tr><td><code>StatusBadgeComponent</code></td><td>Colour-coded pill for Pending/Queued/Sending/Sent/Failed/DLQ</td><td><code>@Input() status: string</code></td></tr>
+        <tr><td><code>PaginatorComponent</code></td><td>Prev/Next/numbered pages, page-size selector</td><td><code>@Input() total, page, pageSize</code> · <code>@Output() pageChange</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Search &amp; Grid Flow</h2>
+  <pre><span class="cm">// Angular service — search with all parameters</span>
+search(params: SearchParams): Observable&lt;PagedResult&lt;MessageDto&gt;&gt; {
+  <span class="kw">const</span> qp = <span class="kw">new</span> HttpParams()
+    .set(<span class="st">'q'</span>, params.q ?? <span class="st">''</span>)
+    .set(<span class="st">'matchType'</span>, params.matchType)
+    .set(<span class="st">'sortBy'</span>, params.sortBy)
+    .set(<span class="st">'sortDir'</span>, params.sortDir)
+    .set(<span class="st">'page'</span>, params.page.toString())
+    .set(<span class="st">'pageSize'</span>, params.pageSize.toString());
+  <span class="kw">return</span> this.http.get&lt;PagedResult&gt;(<span class="st">`/api/messages`</span>, { params: qp });
+}
+
+<span class="cm">// 3-char guard + debounce</span>
+this.searchControl.valueChanges.pipe(
+  <span class="fn">filter</span>(v =&gt; v.length &gt;= 3 || v.length === 0),
+  <span class="fn">debounceTime</span>(300),
+  <span class="fn">distinctUntilChanged</span>(),
+  <span class="fn">switchMap</span>(q =&gt; this.smsService.<span class="fn">search</span>({ ...this.params, q, page: 1 }))
+).subscribe(result =&gt; this.result.set(result));</pre>
+
+  <h2>Sample Records (demo data)</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>To</th><th>From</th><th>Message</th><th>Status</th><th>Created</th></tr></thead>
+      <tbody>
+        <tr><td>1001</td><td>12125551234</td><td>18005550001</td><td>Your appointment is confirmed for Monday at 9 AM.</td><td><span style="color:var(--green);font-weight:600">Sent</span></td><td>10/09 08:14</td></tr>
+        <tr><td>1002</td><td>13105559876</td><td>18005550001</td><td>Hi! Your order #4821 has shipped and is on its way.</td><td><span style="color:var(--accent);font-weight:600">Queued</span></td><td>10/09 11:52</td></tr>
+        <tr><td>1003</td><td>14155552000</td><td>18005550001</td><td>Reminder: your account payment is due tomorrow.</td><td><span style="color:var(--red);font-weight:600">Failed</span></td><td>10/09 11:53</td></tr>
+        <tr><td>1004</td><td>19175554321</td><td>18005550001</td><td>Your verification code is 847261. Expires in 10 min.</td><td><span style="color:var(--green);font-weight:600">Sent</span></td><td>10/09 11:55</td></tr>
+        <tr><td>1005</td><td>12015558888</td><td>18005550001</td><td>Welcome to Acme Alerts! Reply STOP to unsubscribe.</td><td><span style="color:var(--fg2);font-weight:600">Pending</span></td><td>10/09 11:59</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ ERRORS ═══════════════════════════════ -->
+<div class="panel" id="errors">
+  <h2>Error Handling Strategy</h2>
+
+  <div class="spec-grid">
+    <div class="spec-card">
+      <div class="spec-label" style="color:var(--red)">SQL Query Failure — Poller</div>
+      <div class="spec-note">Rethrow from SmsPoller.Run(). Timer retries on next 60-second tick. No rows marked Queued, no messages published. Safe to retry.</div>
+    </div>
+    <div class="spec-card">
+      <div class="spec-label" style="color:var(--orange)">Service Bus Publish Failure</div>
+      <div class="spec-note">Rows already marked Queued. A stale-Queued cleanup job (hourly TimerTrigger) resets rows stuck in Queued &gt;10 min back to Pending automatically.</div>
+    </div>
+    <div class="spec-card">
+      <div class="spec-label" style="color:var(--orange)">Deserialization Error — Sender</div>
+      <div class="spec-note">Log error and <strong>complete</strong> the message (don't rethrow). A malformed message will never succeed — retrying wastes DLQ slots. Alert on this pattern in Application Insights.</div>
+    </div>
+    <div class="spec-card">
+      <div class="spec-label" style="color:var(--red)">SMS API HTTP Failure — transient</div>
+      <div class="spec-note">Rethrow from SmsSender. Service Bus retries up to MaxDeliveryCount=5 with back-off. After 5 failures → DLQ → DeadLetterHandler marks row Failed.</div>
+    </div>
+    <div class="spec-card">
+      <div class="spec-label" style="color:var(--orange)">SMS API — permanent failure</div>
+      <div class="spec-note">"Not Sent – Not a valid phone" / "Not Sent – Not valid by Time zone" are <strong>permanent</strong>. Call PUT /status with Failed immediately; do <strong>not</strong> rethrow (no retry needed). Complete the message.</div>
+    </div>
+    <div class="spec-card">
+      <div class="spec-label" style="color:var(--orange)">SQL Status Update Failure — Sender</div>
+      <div class="spec-note">Log error, do <strong>NOT</strong> rethrow. SMS was already sent — retrying would double-send. Row stays in Sending; reconciliation job fixes stale Sending rows after N minutes.</div>
+    </div>
+    <div class="spec-card">
+      <div class="spec-label" style="color:var(--purple)">Audit Log Write Failure</div>
+      <div class="spec-note">Rethrow from SmsAuditLogger. Retries independently of SmsSender (separate subscription). Audit DLQ is separate — audit failure never blocks SMS delivery.</div>
+    </div>
+    <div class="spec-card">
+      <div class="spec-label" style="color:var(--teal)">Dead-Letter Queue</div>
+      <div class="spec-note">Each subscription has its own DLQ. Monitor with Application Insights alert: ActiveMessages &gt;0 on */$DeadLetterQueue. Operator inspects, resets row to Pending, resubmits.</div>
+    </div>
+  </div>
+
+  <h2>Permanent vs Transient Failure Routing</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Provider response</th><th>Type</th><th>Action in SmsSender</th><th>SQL outcome</th></tr></thead>
+      <tbody>
+        <tr><td>"Successfully Sent"</td><td class="good">Success</td><td>PUT /status Sent, complete message</td><td>Status=Sent</td></tr>
+        <tr><td>"Not Sent – Not a valid phone"</td><td class="bad">Permanent</td><td>PUT /status Failed, complete message (no retry)</td><td>Status=Failed</td></tr>
+        <tr><td>"Not Sent – Not valid by Time zone"</td><td class="bad">Permanent</td><td>PUT /status Failed, complete message (no retry)</td><td>Status=Failed</td></tr>
+        <tr><td>HTTP 5xx / timeout</td><td class="warn-txt">Transient</td><td>Throw — Service Bus retries ×5 → DLQ</td><td>Status=DeadLettered after DLQ handler</td></tr>
+        <tr><td>HTTP 429 Too Many Requests</td><td class="warn-txt">Transient</td><td>Throw — retry with exponential back-off</td><td>Status=DeadLettered if all retries fail</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Idempotency Design</h2>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Poller runs twice, same row published twice</td><td>Mark Queued (UPDATE) before publishing in a transaction; second poll skips Queued rows</td></tr>
+        <tr><td>SmsSender retries after partial success</td><td>Check Status='Sending' before calling API — if already Sent, skip and complete</td></tr>
+        <tr><td>Service Bus duplicate message delivery</td><td>MessageId = CorrelationId enables 5-min duplicate detection window</td></tr>
+        <tr><td>AuditLog inserted twice on retry</td><td>Upsert by CorrelationId + EventType, or accept duplicate rows (append-only audit is safe)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<script>
+function show(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// HLD zoom
+let hldScale = 1;
+const hldCanvas = document.getElementById('hld-canvas');
+function hldZoom(delta) {
+  hldScale = Math.min(2, Math.max(0.3, hldScale + delta / 100));
+  hldCanvas.style.transform = 'scale(' + hldScale + ')';
+  hldCanvas.style.transformOrigin = 'top left';
+  document.getElementById('hld-zoom-val').textContent = Math.round(hldScale * 100) + '%';
+}
+function hldReset() {
+  hldScale = 1;
+  hldCanvas.style.transform = 'scale(1)';
+  document.getElementById('hld-zoom-val').textContent = '100%';
+}
+</script>
+
+</body></html>
