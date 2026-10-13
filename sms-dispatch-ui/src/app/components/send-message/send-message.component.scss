@@ -1,0 +1,30 @@
+.page {
+  max-width: 880px;
+}
+
+.card {
+  border-top: 3px solid var(--primary);
+}
+
+.message-footer {
+  display: flex;
+  justify-content: space-between;
+}
+
+.submission-alert {
+  margin-bottom: 20px;
+}
+
+.status-error {
+  color: #e74c3c;
+}
+
+.terminal-actions {
+  margin-top: 20px;
+}
+
+.polling-note {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 13px;
+}

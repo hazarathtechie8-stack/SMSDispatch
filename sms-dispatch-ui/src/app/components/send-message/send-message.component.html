@@ -1,0 +1,105 @@
+<div class="page">
+  <h1 class="page-title">Send SMS Message</h1>
+
+  @if (errorMsg()) {
+    <div class="alert alert-error">{{ errorMsg() }}</div>
+  }
+
+  @if (!sendResponse()) {
+    <div class="card">
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <div class="form-row">
+          <div class="form-group">
+            <label>To Phone Number *</label>
+            <input formControlName="toPhoneNumber" placeholder="e.g. 15551234567" />
+            @if (form.get('toPhoneNumber')?.touched && form.get('toPhoneNumber')?.invalid) {
+              <span class="error">Enter a valid E.164 phone number (10–15 digits)</span>
+            }
+          </div>
+          <div class="form-group">
+            <label>From Phone Number *</label>
+            <input formControlName="fromPhoneNumber" placeholder="e.g. 15559876543" />
+            @if (form.get('fromPhoneNumber')?.touched && form.get('fromPhoneNumber')?.invalid) {
+              <span class="error">Enter a valid E.164 phone number (10–15 digits)</span>
+            }
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Recipient Name</label>
+          <input formControlName="recipientName" placeholder="Optional display name" />
+        </div>
+
+        <div class="form-group">
+          <label>Message *</label>
+          <textarea formControlName="message" placeholder="Type your SMS message here..."></textarea>
+          <div class="message-footer">
+            @if (form.get('message')?.touched && form.get('message')?.invalid) {
+              <span class="error">Message is required (max 1,000 characters)</span>
+            } @else { <span></span> }
+            <span class="char-count">{{ msgLen }} / 1000</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" type="submit" [disabled]="submitting()">
+          @if (submitting()) { <span class="spinner"></span> Submitting… }
+          @else { &#9993; Send Message }
+        </button>
+      </form>
+    </div>
+  }
+
+  @if (sendResponse()) {
+    <div class="card">
+      <div class="alert alert-success submission-alert">
+        Message submitted — ID <strong>#{{ sendResponse()!.id }}</strong>. Tracking delivery…
+      </div>
+
+      <div class="status-tracker">
+        <div class="tracker-row">
+          <span class="tracker-label">Message ID</span>
+          <span class="tracker-value">#{{ sendResponse()!.id }}</span>
+        </div>
+        <div class="tracker-row">
+          <span class="tracker-label">Status</span>
+          <span [class]="badgeClass(statusInfo()?.status ?? sendResponse()!.status)">
+            {{ statusInfo()?.status ?? sendResponse()!.status }}
+          </span>
+          @if (polling()) { <span class="polling-dot"></span> }
+        </div>
+        @if (statusInfo()?.recipientName) {
+          <div class="tracker-row">
+            <span class="tracker-label">Recipient</span>
+            <span class="tracker-value">{{ statusInfo()!.recipientName }}</span>
+          </div>
+        }
+        @if (statusInfo()?.toPhoneNumber) {
+          <div class="tracker-row">
+            <span class="tracker-label">To</span>
+            <span class="tracker-value">{{ statusInfo()!.toPhoneNumber }}</span>
+          </div>
+        }
+        @if (statusInfo()?.errorMessage) {
+          <div class="tracker-row">
+            <span class="tracker-label">Error</span>
+            <span class="tracker-value status-error">{{ statusInfo()!.errorMessage }}</span>
+          </div>
+        }
+        @if (statusInfo()?.createdDateTime) {
+          <div class="tracker-row">
+            <span class="tracker-label">Submitted</span>
+            <span class="tracker-value">{{ statusInfo()!.createdDateTime | date:'medium' }}</span>
+          </div>
+        }
+      </div>
+
+      @if (isTerminal()) {
+        <div class="terminal-actions">
+          <button class="btn btn-secondary" (click)="reset()">Send Another Message</button>
+        </div>
+      } @else if (polling()) {
+        <p class="polling-note">Checking status every 3 seconds…</p>
+      }
+    </div>
+  }
+</div>

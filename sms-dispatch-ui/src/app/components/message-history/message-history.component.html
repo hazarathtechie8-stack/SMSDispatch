@@ -1,0 +1,93 @@
+<div class="page">
+  <div class="history-header">
+    <h1 class="page-title history-title">Message History</h1>
+    <div class="history-actions">
+      <span class="record-count">{{ total() }} record{{ total() !== 1 ? 's' : '' }}</span>
+      <button class="btn btn-secondary btn-sm" (click)="load()" [disabled]="loading()">&#8635; Refresh</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <span class="search-icon">&#128269;</span>
+        <input
+          type="text"
+          [(ngModel)]="search"
+          (ngModelChange)="onSearchChange()"
+          placeholder="Search messages or recipients (min 3 chars)…"
+          autocomplete="off" />
+      </div>
+      <select [(ngModel)]="criteria" (ngModelChange)="onCriteriaChange()">
+        <option value="contains">Contains</option>
+        <option value="equals">Equals</option>
+      </select>
+    </div>
+
+    @if (search.length > 0 && search.length < 3) {
+      <div class="alert alert-info search-hint">Type at least 3 characters to search.</div>
+    }
+
+    @if (error()) {
+      <div class="alert alert-error">{{ error() }}</div>
+    }
+
+    @if (loading()) {
+      <div class="empty-state"><span class="spinner"></span>&nbsp; Loading…</div>
+    } @else if (items().length === 0) {
+      <div class="empty-state">
+        @if (search.length >= 3) { No messages match "{{ search }}" }
+        @else { No messages yet. Send one to get started. }
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th (click)="sort('createdDateTime')" [class.active]="isActive('createdDateTime')">
+                Submitted <span class="sort-icon">{{ sortIcon('createdDateTime') }}</span>
+              </th>
+              <th (click)="sort('recipient')" [class.active]="isActive('recipient')">
+                Recipient <span class="sort-icon">{{ sortIcon('recipient') }}</span>
+              </th>
+              <th>To</th>
+              <th>Message</th>
+              <th (click)="sort('status')" [class.active]="isActive('status')">
+                Status <span class="sort-icon">{{ sortIcon('status') }}</span>
+              </th>
+              <th (click)="sort('modifiedDatetime')" [class.active]="isActive('modifiedDatetime')">
+                Updated <span class="sort-icon">{{ sortIcon('modifiedDatetime') }}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (m of items(); track m.id) {
+              <tr>
+                <td>{{ m.createdDateTime | date:'MM/dd/yy HH:mm' }}</td>
+                <td>{{ m.recipientName || '—' }}</td>
+                <td>{{ m.toPhoneNumber }}</td>
+                <td class="truncate" [title]="m.message">{{ truncate(m.message) }}</td>
+                <td><span [class]="badgeClass(m.status)">{{ m.status }}</span></td> 
+                  <!-- <td>{{ m.status }}</td>  -->
+                <td>{{ m.modifiedDatetime | date:'MM/dd/yy HH:mm' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (totalPages > 1) {
+        <div class="pagination">
+          <span>Page {{ page }} of {{ totalPages }}</span>
+          <button (click)="goPage(1)"    [disabled]="page === 1">«</button>
+          <button (click)="goPage(page - 1)" [disabled]="page === 1">‹</button>
+          @for (p of pageNumbers; track p) {
+            <button (click)="goPage(p)" [class.active]="p === page">{{ p }}</button>
+          }
+          <button (click)="goPage(page + 1)" [disabled]="page === totalPages">›</button>
+          <button (click)="goPage(totalPages)" [disabled]="page === totalPages">»</button>
+        </div>
+      }
+    }
+  </div>
+</div>
